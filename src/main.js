@@ -1,5 +1,8 @@
 const path = require("path");
 const { Worker, MessageChannel } = require("worker_threads");
+const http = require("http");
+const websocket = require("websocket");
+
 const { Calculator } = require("./chart_data_calculator.js");
 const { Reader } = require("./data_reader.js");
 
@@ -14,4 +17,22 @@ Calculator.create({
   outgoingPort: calculatorOutgoingPort
 });
 
-webIncomingPort.on("message", data => console.log("From main thread", data));
+const server = http.createServer();
+server.listen(8080);
+
+const wsServer = new websocket.server({
+  httpServer: server
+});
+
+wsServer.on("request", function(request) {
+  const connection = request.accept(null, request.origin);
+  connection.on("message", function(message) {
+    console.log("Received Message:", message.utf8Data);
+    connection.sendUTF("Hi this is WebSocket server!");
+  });
+  connection.on("close", function(reasonCode, description) {
+    console.log("Client has disconnected.");
+  });
+
+  webIncomingPort.on("message", data => connection.sendUTF(data));
+});
