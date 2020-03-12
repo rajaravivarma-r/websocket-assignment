@@ -11,6 +11,7 @@ class Calculator {
     this.accumulate = this.accumulate.bind(this);
     this.closeOhlcData = this.closeOhlcData.bind(this);
     this.store = this.store.bind(this);
+    this.asJson = this.asJson.bind(this);
 
     this.barNum = 1;
     this.accumulatedData = new Map();
@@ -43,6 +44,9 @@ class Calculator {
     );
 
     if (this.accumulatedData.get(stockName)) {
+      // TODO: Abstract this procedural code into another class such as
+      // OHLCHistory
+      //   has_many: OHLCData
       const ohlcHistory = this.accumulatedData.get(stockName);
       const lastTrade = ohlcHistory[ohlcHistory.length - 1];
       if (lastTrade) {
@@ -99,7 +103,26 @@ class Calculator {
   }
 
   store(ohlcData) {
-    this.outgoingPort.postMessage(ohlcData);
+    for (let [stock, dataList] of ohlcData) {
+      for (let data of dataList) {
+        const ohlcDataAsJson = this.asJson(stock, data);
+        this.outgoingPort.postMessage(ohlcDataAsJson);
+      }
+    }
+  }
+
+  asJson(stock, data) {
+    const jsonData = {
+      event: "ohlc_notify",
+      symbol: stock,
+      bar_num: data.barNum,
+      o: data.open,
+      h: data.high,
+      l: data.low,
+      c: data.close,
+      volume: data.volume
+    };
+    return JSON.stringify(jsonData);
   }
 
   static create({
