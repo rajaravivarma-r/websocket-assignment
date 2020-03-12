@@ -6,7 +6,7 @@ const {
 } = require("worker_threads");
 
 class Calculator {
-  constructor({ incomingPort }) {
+  constructor({ incomingPort, outgoingPort }) {
     this.startPerforming = this.startPerforming.bind(this);
     this.accumulate = this.accumulate.bind(this);
     this.closeOhlcData = this.closeOhlcData.bind(this);
@@ -15,6 +15,7 @@ class Calculator {
     this.barNum = 1;
     this.accumulatedData = new Map();
     incomingPort.on("message", this.startPerforming);
+    this.outgoingPort = outgoingPort;
   }
 
   startPerforming(stockDataJson) {
@@ -55,6 +56,7 @@ class Calculator {
           high: newHigh,
           low: newLow,
           close: 0.0,
+          price: price,
           barNum: this.barNum,
           volume: newVolume
         });
@@ -67,6 +69,7 @@ class Calculator {
           high: price,
           low: price,
           close: 0.0,
+          price: price,
           barNum: this.barNum,
           volume: quantityTraded
         }
@@ -91,22 +94,26 @@ class Calculator {
   closeOhlcData(closingPrice) {
     for (let [stockName, ohlcHistory] of this.accumulatedData) {
       let ohlcData = ohlcHistory[ohlcHistory.length - 1];
-      ohlcData.close = closingPrice;
+      ohlcData.close = ohlcData.price;
     }
   }
 
   store(ohlcData) {
-    parentPort.postMessage(ohlcData);
+    this.outgoingPort.postMessage(ohlcData);
   }
 
   static create({
     onData = data => console.log(data),
     onError = e => console.log("Error: ", e),
     onDone = code => console.log("Done"),
-    incomingPort
+    incomingPort,
+    outgoingPort
   } = {}) {
     const worker = new Worker(__filename);
-    worker.postMessage({ incomingPort }, [incomingPort]);
+    worker.postMessage({ incomingPort, outgoingPort }, [
+      incomingPort,
+      outgoingPort
+    ]);
     worker.on("message", onData);
     worker.on("error", onError);
     worker.on("exit", onDone);
@@ -114,8 +121,8 @@ class Calculator {
 }
 
 if (!isMainThread) {
-  parentPort.on("message", ({ incomingPort }) => {
-    let calculator = new Calculator({ incomingPort });
+  parentPort.on("message", ({ incomingPort, outgoingPort }) => {
+    let calculator = new Calculator({ incomingPort, outgoingPort });
   });
 }
 
